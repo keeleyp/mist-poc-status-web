@@ -1,0 +1,6 @@
+*.ini
+!mist_poc_status_web.ini.example
+*.xlsx
+__pycache__/
+.DS_Store
+.claude/

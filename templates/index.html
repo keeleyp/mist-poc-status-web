@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Orgs{% endblock %}
+{% block content %}
+<section class="summary">
+  <div class="stat"><span class="num">{{ rows|length }}</span><span class="lbl">orgs</span></div>
+  <div class="stat"><span class="num ok">{{ active }}</span><span class="lbl">active</span></div>
+  <div class="stat"><span class="num bad">{{ idle }}</span><span class="lbl">idle</span></div>
+  <div class="stat"><span class="num small">{{ last_run or "never" }}</span><span class="lbl">last run · {{ n_runs }} run(s) in history</span></div>
+  <div class="run-box">
+    <button id="run-btn" type="button" {% if run.running %}disabled{% endif %}>
+      {% if run.running %}Running…{% else %}Run report now{% endif %}
+    </button>
+    <span class="hint">Takes about 6 API calls per org.</span>
+  </div>
+</section>
+
+<section id="run-panel" class="panel" {% if not (run.running or run.error) %}hidden{% endif %}>
+  <h2 id="run-title">Run</h2>
+  <div id="run-error" class="flash error" hidden></div>
+  <table id="run-failures" class="compact" hidden><thead><tr><th>Where</th><th>Problem</th></tr></thead><tbody></tbody></table>
+  <pre id="run-log"></pre>
+</section>
+
+{% if rows %}
+<div class="toolbar">
+  <input id="filter" type="search" placeholder="Filter orgs…" aria-label="Filter orgs">
+  <label><input type="checkbox" id="idle-only"> Idle only</label>
+  <label><input type="checkbox" id="missing-only"> Missing POC details</label>
+  <span class="hint">Active = any client, or audit log entry by someone other than us, in the last 24 hours.</span>
+</div>
+<div class="table-wrap">
+<table id="orgs" class="data">
+  <thead>
+    <tr>
+      <th>Org</th><th>Cloud</th><th>Usage</th><th class="n">Sites</th>
+      <th class="n">APs<br><small>on / off</small></th>
+      <th class="n">Switches<br><small>on / off</small></th>
+      <th class="n">Gateways<br><small>on / off</small></th>
+      <th class="n">WiFi clients<br><small>24h</small></th>
+      <th class="n">Wired clients<br><small>24h</small></th>
+      <th class="n">Audit entries<br><small>24h</small></th>
+      <th>POC details</th><th class="n">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr data-usage="{{ r.usage }}" data-missing="{{ 1 if r.missing else 0 }}">
+      <td><a href="{{ url_for('org', cloud=r.cloud, org_id=r.org_id) }}">{{ r.org_name }}</a>
+        {% if r.sf_record %}<div class="sub">{{ r.sf_record }}</div>{% endif %}</td>
+      <td class="muted">{{ r.cloud }}</td>
+      <td><span class="badge {{ r.usage|lower }}">{{ r.usage }}</span></td>
+      <td class="n">{{ r.sites }}</td>
+      <td class="n">{{ r.ap_online }} / <span class="{{ 'off' if r.ap_offline }}">{{ r.ap_offline }}</span></td>
+      <td class="n">{{ r.switch_online }} / <span class="{{ 'off' if r.switch_offline }}">{{ r.switch_offline }}</span></td>
+      <td class="n">{{ r.gateway_online }} / <span class="{{ 'off' if r.gateway_offline }}">{{ r.gateway_offline }}</span></td>
+      <td class="n">{{ "{:,}".format(r.wireless_clients) }}</td>
+      <td class="n">{{ "{:,}".format(r.wired_clients) }}</td>
+      <td class="n">{{ r.audit_entries }}</td>
+      <td>{% if r.missing %}<span class="missing" title="Missing: {{ r.missing|join(', ') }}">missing: {{ r.missing|join(", ") }}</span>{% else %}<span class="complete">complete</span>{% endif %}</td>
+      <td class="n">{{ r.n_notes }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">No runs yet - click <strong>Run report now</strong> to collect the first one.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const btn = document.getElementById('run-btn');
+  const panel = document.getElementById('run-panel');
+  const log = document.getElementById('run-log');
+  const title = document.getElementById('run-title');
+  const err = document.getElementById('run-error');
+  const fails = document.getElementById('run-failures');
+  let timer = null;
+
+  function show(s) {
+    panel.hidden = false;
+    log.textContent = s.log.join('\n');
+    log.scrollTop = log.scrollHeight;
+    title.textContent = s.running ? 'Running… (started ' + s.started + ')'
+                      : (s.error ? 'Run failed' : 'Run finished');
+    err.hidden = !s.error;
+    err.textContent = s.error || '';
+    const body = fails.querySelector('tbody');
+    body.innerHTML = '';
+    (s.failures || []).forEach(function (f) {
+      const tr = document.createElement('tr');
+      f.forEach(function (v) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    fails.hidden = !(s.failures && s.failures.length);
+    btn.disabled = s.running;
+    btn.textContent = s.running ? 'Running…' : 'Run report now';
+  }
+
+  function poll() {
+    fetch('{{ url_for("run_status") }}').then(r => r.json()).then(function (s) {
+      show(s);
+      if (s.running) { timer = setTimeout(poll, 1500); }
+      else if (!s.error && s.run_time) { location.reload(); }
+    });
+  }
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    fetch('{{ url_for("start_run") }}', {method: 'POST'}).then(r => r.json()).then(function (s) {
+      show(s); clearTimeout(timer); timer = setTimeout(poll, 1000);
+    });
+  });
+  {% if run.running %}poll();{% elif run.error %}show({{ run|tojson }});{% endif %}
+
+  // Table filters
+  const filter = document.getElementById('filter');
+  if (filter) {
+    const idle = document.getElementById('idle-only');
+    const missing = document.getElementById('missing-only');
+    const rows = document.querySelectorAll('#orgs tbody tr');
+    function apply() {
+      const q = filter.value.trim().toLowerCase();
+      rows.forEach(function (tr) {
+        const hit = !q || tr.textContent.toLowerCase().includes(q);
+        const ok = (!idle.checked || tr.dataset.usage === 'Idle') &&
+                   (!missing.checked || tr.dataset.missing === '1');
+        tr.hidden = !(hit && ok);
+      });
+    }
+    [filter, idle, missing].forEach(el => el.addEventListener('input', apply));
+  }
+})();
+</script>
+{% endblock %}

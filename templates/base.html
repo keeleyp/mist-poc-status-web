@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}POC Status{% endblock %} · Mist POC Status</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">Mist POC Status</a>
+    <nav>
+      <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="on"{% endif %}>Orgs</a>
+      <a href="{{ url_for('trends') }}" {% if request.endpoint == 'trends' %}class="on"{% endif %}>Trends</a>
+      <a href="{{ url_for('download') }}">Download Excel</a>
+    </nav>
+  </header>
+  <main>
+    {% for w in warnings %}<div class="flash error">{{ w }}</div>{% endfor %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>v{{ version }} · data in {{ workbook }}</footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

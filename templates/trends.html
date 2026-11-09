@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Trends{% endblock %}
+{% block content %}
+<h1>Trends</h1>
+<nav class="tabs">
+  {% for key, name in metrics %}
+    <a href="{{ url_for('trends', metric=key) }}" {% if key == metric %}class="on"{% endif %}>{{ name }}</a>
+  {% endfor %}
+</nav>
+{% if runs %}
+<p class="muted">{{ labels[metric] }} for every org, one column per run (newest on the right). ▲ / ▼ = change since the previous run.</p>
+<div class="table-wrap">
+<table class="data trend">
+  <thead><tr><th>Org</th><th>Cloud</th>{% for run in runs %}<th class="n">{{ run }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for cloud, org_id, name, values in table %}
+    <tr>
+      <td><a href="{{ url_for('org', cloud=cloud, org_id=org_id) }}">{{ name }}</a></td>
+      <td class="muted">{{ cloud }}</td>
+      {% for v in values %}
+        {% set prev = values[loop.index0 - 1] if loop.index0 > 0 else none %}
+        <td class="n">{% if v is none %}<span class="muted">–</span>{% else %}{{ "{:,}".format(v) }}
+          {% if prev is not none and v != prev %}<span class="{{ 'up' if v > prev else 'down' }}">{{ '▲' if v > prev else '▼' }}</span>{% endif %}{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">No runs yet.</div>
+{% endif %}
+{% endblock %}

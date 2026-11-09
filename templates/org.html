@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ org_name }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="{{ url_for('index') }}">← All orgs</a></p>
+<h1>{{ org_name }}
+  {% if latest %}<span class="badge {{ latest.usage|lower }}">{{ latest.usage }}</span>{% endif %}
+</h1>
+<p class="muted">{{ cloud }} · {{ org_id }} · <a href="{{ manage_url }}" target="_blank" rel="noopener">Open in Mist ↗</a>
+  {% if latest %} · figures from {{ latest.date }}{% if not in_last_run %} <strong>(not in the last run)</strong>{% endif %}{% endif %}</p>
+
+{% if latest %}
+<section class="cards">
+  <div class="card"><span class="num">{{ latest.sites }}</span><span class="lbl">sites</span></div>
+  <div class="card"><span class="num">{{ latest.ap_online }}<small> / {{ latest.ap_offline }}</small></span><span class="lbl">APs online / offline</span></div>
+  <div class="card"><span class="num">{{ latest.switch_online }}<small> / {{ latest.switch_offline }}</small></span><span class="lbl">switches online / offline</span></div>
+  <div class="card"><span class="num">{{ latest.gateway_online }}<small> / {{ latest.gateway_offline }}</small></span><span class="lbl">gateways online / offline</span></div>
+  <div class="card"><span class="num">{{ "{:,}".format(latest.wireless_clients) }}</span><span class="lbl">WiFi clients 24h</span></div>
+  <div class="card"><span class="num">{{ "{:,}".format(latest.wired_clients) }}</span><span class="lbl">wired clients 24h</span></div>
+  <div class="card"><span class="num">{{ latest.audit_entries }}</span><span class="lbl">audit entries 24h ({{ latest.audit_admins }} admin{{ '' if latest.audit_admins == 1 else 's' }})</span></div>
+</section>
+{% endif %}
+
+<div class="two-col">
+  <section class="panel">
+    <h2>POC details</h2>
+    <form method="post" action="{{ url_for('save_details', cloud=cloud, org_id=org_id) }}" class="form">
+      {% for label, key, is_email in fields %}
+        <label for="{{ key }}">{{ label }}</label>
+        <input id="{{ key }}" name="{{ key }}" type="{{ 'email' if is_email else 'text' }}"
+               value="{{ details.get(key, '') }}" {% if errors.get(key) %}aria-invalid="true"{% endif %}
+               placeholder="{{ 'name@company.com' if is_email else 'e.g. opportunity or account ID' }}">
+        {% if errors.get(key) %}<div class="field-error">{{ errors[key] }}</div>{% endif %}
+      {% endfor %}
+      <button type="submit">Save details</button>
+    </form>
+  </section>
+
+  <section class="panel" id="notes">
+    <h2>Notes <span class="muted">({{ notes|length }})</span></h2>
+    <form method="post" action="{{ url_for('add_note', cloud=cloud, org_id=org_id) }}" class="form">
+      <textarea name="note" rows="3" placeholder="Add a note - who you spoke to, next steps…" required></textarea>
+      <button type="submit">Add note</button>
+    </form>
+    {% if notes %}
+    <ul class="notes">
+      {% for when, text in notes %}<li><time>{{ when }}</time><div class="note-text">{{ text }}</div></li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted">No notes yet.</p>{% endif %}
+  </section>
+</div>
+
+{% if history %}
+<section>
+  <h2>Run history <span class="muted">(newest first)</span></h2>
+  <div class="table-wrap">
+  <table class="data">
+    <thead><tr>
+      <th>Run</th><th>Usage</th><th class="n">Sites</th>
+      <th class="n">APs on / off</th><th class="n">Switches on / off</th><th class="n">Gateways on / off</th>
+      <th class="n">WiFi clients</th><th class="n">Wired clients</th><th class="n">Audit entries</th>
+    </tr></thead>
+    <tbody>
+    {% for r in history %}
+      <tr>
+        <td>{{ r.date }}</td>
+        <td><span class="badge {{ (r.usage or '')|lower }}">{{ r.usage }}</span></td>
+        <td class="n">{{ r.sites }}</td>
+        <td class="n">{{ r.ap_online }} / {{ r.ap_offline }}</td>
+        <td class="n">{{ r.switch_online }} / {{ r.switch_offline }}</td>
+        <td class="n">{{ r.gateway_online }} / {{ r.gateway_offline }}</td>
+        <td class="n">{{ r.wireless_clients }}</td>
+        <td class="n">{{ r.wired_clients }}</td>
+        <td class="n">{{ r.audit_entries }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

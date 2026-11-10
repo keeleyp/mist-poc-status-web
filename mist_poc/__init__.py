@@ -6,4 +6,4 @@
   store      - the Excel workbook (history, trends, POC details and notes)
   model      - the figures, POC detail fields and trend definitions
 """
-__version__ = "0.1.0"
+__version__ = "1.0.0"
